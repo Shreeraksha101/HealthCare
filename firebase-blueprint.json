@@ -1,0 +1,234 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated patient profile, medical emergency info, and provider role preference.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the user." },
+        "displayName": { "type": "string", "description": "Full display name." },
+        "email": { "type": "string", "description": "User email address." },
+        "photoUrl": { "type": "string", "description": "Optional avatar URL." },
+        "bloodGroup": { "type": "string", "description": "Patient blood group (e.g. O+, A-)." },
+        "allergies": { "type": "string", "description": "Known allergies summary." },
+        "emergencyContactName": { "type": "string", "description": "Emergency contact person name." },
+        "emergencyContactPhone": { "type": "string", "description": "Emergency contact phone number." },
+        "dateOfBirth": { "type": "string", "description": "Date of birth string." },
+        "providerMode": { "type": "boolean", "description": "Whether the user has enabled Doctor/Provider portal features." },
+        "notificationsEnabled": { "type": "boolean", "description": "Whether medicine reminder notifications are enabled." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": ["userId", "displayName", "email", "providerMode", "notificationsEnabled", "createdAt", "updatedAt"]
+    },
+    "Doctor": {
+      "title": "Doctor",
+      "description": "Doctor directory profile with qualifications, clinic info, and virtual telemedicine availability.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "description": "UID of the user managing this doctor profile." },
+        "name": { "type": "string", "description": "Doctor full name." },
+        "specialization": { "type": "string", "description": "Medical specialization." },
+        "qualifications": { "type": "string", "description": "Academic and clinical degrees." },
+        "hospitalName": { "type": "string", "description": "Affiliated hospital or clinic." },
+        "clinicAddress": { "type": "string", "description": "Clinic physical address." },
+        "phone": { "type": "string", "description": "Clinic contact phone." },
+        "experienceYears": { "type": "integer", "description": "Years of medical practice." },
+        "rating": { "type": "number", "description": "Average patient rating (0.0 - 5.0)." },
+        "inPersonFee": { "type": "integer", "description": "In-person consultation fee." },
+        "virtualFee": { "type": "integer", "description": "Virtual telemedicine consultation fee." },
+        "telemedicineEnabled": { "type": "boolean", "description": "Whether virtual consultations are offered." },
+        "listedInDirectory": { "type": "boolean", "description": "Whether the doctor appears in the public directory." },
+        "avatarKey": { "type": "string", "description": "Avatar preset key (female or male)." },
+        "bio": { "type": "string", "description": "Short clinical biography." },
+        "virtualSlots": { "type": "array", "description": "Available virtual consultation time slots." },
+        "clinicSlots": { "type": "array", "description": "Available in-person clinic time slots." },
+        "availableDays": { "type": "array", "description": "Days of week doctor is available." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": [
+        "ownerUid", "name", "specialization", "qualifications", "hospitalName",
+        "clinicAddress", "phone", "experienceYears", "rating", "inPersonFee",
+        "virtualFee", "telemedicineEnabled", "listedInDirectory", "avatarKey",
+        "bio", "virtualSlots", "clinicSlots", "availableDays", "createdAt", "updatedAt"
+      ]
+    },
+    "BookedSlot": {
+      "title": "BookedSlot",
+      "description": "Non-PII slot lock preventing double-booking of a doctor's time slot on a given date.",
+      "type": "object",
+      "properties": {
+        "doctorId": { "type": "string", "description": "Target doctor ID." },
+        "dateIso": { "type": "string", "description": "Date in YYYY-MM-DD." },
+        "timeSlot": { "type": "string", "description": "Slot string (e.g. 10:30 AM)." },
+        "consultationType": { "type": "string", "description": "VIRTUAL or IN_PERSON." },
+        "bookedByUid": { "type": "string", "description": "UID of the patient who reserved the slot." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of reservation." }
+      },
+      "required": ["doctorId", "dateIso", "timeSlot", "consultationType", "bookedByUid", "createdAt"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Booked in-person or virtual telemedicine appointment between patient and doctor.",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string", "description": "Patient Firebase UID." },
+        "patientName": { "type": "string", "description": "Patient display name." },
+        "doctorId": { "type": "string", "description": "Doctor document ID." },
+        "doctorOwnerUid": { "type": "string", "description": "UID of the doctor profile owner." },
+        "doctorName": { "type": "string", "description": "Doctor display name." },
+        "department": { "type": "string", "description": "Medical department / specialization." },
+        "hospitalName": { "type": "string", "description": "Clinic or hospital name." },
+        "consultationType": { "type": "string", "description": "VIRTUAL or IN_PERSON." },
+        "dateIso": { "type": "string", "description": "Appointment date (YYYY-MM-DD)." },
+        "timeSlot": { "type": "string", "description": "Appointment time slot." },
+        "reason": { "type": "string", "description": "Visit reason or symptoms." },
+        "status": { "type": "string", "description": "UPCOMING, IN_CALL, COMPLETED, or CANCELLED." },
+        "roomId": { "type": "string", "description": "Optional linked telemedicine room ID." },
+        "slotKey": { "type": "string", "description": "Optional slot lock key under doctor bookedSlots." },
+        "notes": { "type": "string", "description": "Optional post-visit summary notes." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of booking." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of update." }
+      },
+      "required": [
+        "patientId", "patientName", "doctorId", "doctorOwnerUid", "doctorName",
+        "department", "hospitalName", "consultationType", "dateIso", "timeSlot",
+        "reason", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "TelemedicineRoom": {
+      "title": "TelemedicineRoom",
+      "description": "Real-time telemedicine video consultation room session state.",
+      "type": "object",
+      "properties": {
+        "appointmentId": { "type": "string", "description": "Linked appointment ID." },
+        "patientId": { "type": "string", "description": "Patient UID." },
+        "doctorOwnerUid": { "type": "string", "description": "Doctor owner UID." },
+        "participantUids": { "type": "array", "description": "Array containing patient and doctor UIDs." },
+        "doctorName": { "type": "string", "description": "Doctor name." },
+        "patientName": { "type": "string", "description": "Patient name." },
+        "status": { "type": "string", "description": "WAITING, IN_CALL, or ENDED." },
+        "patientMicOn": { "type": "boolean", "description": "Patient microphone state." },
+        "patientCamOn": { "type": "boolean", "description": "Patient camera state." },
+        "doctorMicOn": { "type": "boolean", "description": "Doctor microphone state." },
+        "doctorCamOn": { "type": "boolean", "description": "Doctor camera state." },
+        "durationSeconds": { "type": "integer", "description": "Elapsed call duration in seconds." },
+        "summaryNotes": { "type": "string", "description": "Optional consultation summary notes." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": [
+        "appointmentId", "patientId", "doctorOwnerUid", "participantUids",
+        "doctorName", "patientName", "status", "patientMicOn", "patientCamOn",
+        "doctorMicOn", "doctorCamOn", "durationSeconds", "createdAt", "updatedAt"
+      ]
+    },
+    "TelemedicineMessage": {
+      "title": "TelemedicineMessage",
+      "description": "Encrypted-session in-call chat message between patient and doctor.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "description": "Parent room ID." },
+        "participantUids": { "type": "array", "description": "Denormalized participant UIDs." },
+        "senderUid": { "type": "string", "description": "Sender UID." },
+        "senderName": { "type": "string", "description": "Sender display name." },
+        "senderRole": { "type": "string", "description": "PATIENT or DOCTOR." },
+        "text": { "type": "string", "description": "Chat message content." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": ["roomId", "participantUids", "senderUid", "senderName", "senderRole", "text", "createdAt"]
+    },
+    "Medicine": {
+      "title": "Medicine",
+      "description": "User medication schedule entry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner patient UID." },
+        "name": { "type": "string", "description": "Medication name." },
+        "dosage": { "type": "string", "description": "Dosage strength (e.g. 500 mg)." },
+        "instructions": { "type": "string", "description": "Intake instructions (e.g. After meals)." },
+        "scheduleTimes": { "type": "array", "description": "Daily scheduled reminder times." },
+        "remindersEnabled": { "type": "boolean", "description": "Whether notifications are active." },
+        "active": { "type": "boolean", "description": "Whether medication is currently active." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": ["userId", "name", "dosage", "instructions", "scheduleTimes", "remindersEnabled", "active", "createdAt", "updatedAt"]
+    },
+    "DoseLog": {
+      "title": "DoseLog",
+      "description": "Daily medication dose adherence record (TAKEN, MISSED, PENDING).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner patient UID." },
+        "medicineId": { "type": "string", "description": "Linked medicine ID." },
+        "medicineName": { "type": "string", "description": "Medicine name snapshot." },
+        "dosage": { "type": "string", "description": "Dosage snapshot." },
+        "dateIso": { "type": "string", "description": "Date in YYYY-MM-DD." },
+        "scheduledTime": { "type": "string", "description": "Scheduled slot string." },
+        "status": { "type": "string", "description": "TAKEN, MISSED, or PENDING." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": ["userId", "medicineId", "medicineName", "dosage", "dateIso", "scheduledTime", "status", "createdAt", "updatedAt"]
+    },
+    "MedicalReport": {
+      "title": "MedicalReport",
+      "description": "Private medical report metadata referencing app-private encrypted/sandboxed file.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner patient UID." },
+        "title": { "type": "string", "description": "Report title." },
+        "category": { "type": "string", "description": "Report category." },
+        "reportDate": { "type": "string", "description": "Date of report (YYYY-MM-DD)." },
+        "fileName": { "type": "string", "description": "Original file name." },
+        "mimeType": { "type": "string", "description": "File MIME type." },
+        "fileSizeBytes": { "type": "integer", "description": "File size in bytes." },
+        "localRelativePath": { "type": "string", "description": "Relative path inside app-private storage." },
+        "notes": { "type": "string", "description": "Optional notes or summary." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": ["userId", "title", "category", "reportDate", "fileName", "mimeType", "fileSizeBytes", "localRelativePath", "notes", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Patient profile and medical preferences isolated to the owning user."
+    },
+    "/doctors/{doctorId}": {
+      "schema": { "$ref": "#/entities/Doctor" },
+      "description": "Doctor directory and virtual consultation availability profiles."
+    },
+    "/doctors/{doctorId}/bookedSlots/{slotKey}": {
+      "schema": { "$ref": "#/entities/BookedSlot" },
+      "description": "Slot reservation locks preventing double booking."
+    },
+    "/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "Patient and doctor appointments supporting clinic and virtual telemedicine visits."
+    },
+    "/telemedicineRooms/{roomId}": {
+      "schema": { "$ref": "#/entities/TelemedicineRoom" },
+      "description": "Secure video consultation room state accessible only to patient and doctor."
+    },
+    "/telemedicineRooms/{roomId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/TelemedicineMessage" },
+      "description": "In-call chat messages scoped to room participants."
+    },
+    "/users/{userId}/medicines/{medicineId}": {
+      "schema": { "$ref": "#/entities/Medicine" },
+      "description": "User-private medication schedules."
+    },
+    "/users/{userId}/doseLogs/{logId}": {
+      "schema": { "$ref": "#/entities/DoseLog" },
+      "description": "User-private daily dose adherence logs."
+    },
+    "/users/{userId}/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/MedicalReport" },
+      "description": "User-private medical report metadata."
+    }
+  }
+}

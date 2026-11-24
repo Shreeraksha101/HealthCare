@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">HealthCare Companion</string>
+    <string name="nav_dashboard">Home</string>
+    <string name="nav_appointments">Visits</string>
+    <string name="nav_medicines">Meds</string>
+    <string name="nav_ai_assistant">AI Guide</string>
+    <string name="nav_doctors">Doctors</string>
+    <string name="nav_hospitals">Hospitals</string>
+    <string name="nav_reports">Reports</string>
+    <string name="nav_profile">Profile</string>
+
+    <string name="auth_title">Welcome to HealthCare Companion</string>
+    <string name="auth_subtitle">Your personal healthcare, all in one place.</string>
+    <string name="auth_google_button">Continue with Google</string>
+    <string name="auth_privacy_note">Encrypted cloud sync • Your medical records remain strictly private to your account.</string>
+
+    <string name="emergency_banner_title">Seek Immediate Emergency Care</string>
+    <string name="emergency_banner_body">Symptoms like chest pain, trouble breathing, severe bleeding, or sudden weakness require urgent medical evaluation.</string>
+    <string name="emergency_call_button">Call Emergency (911)</string>
+    <string name="ai_disclaimer">AI guidance explains medical terms and general wellness only. It does not diagnose conditions or replace a licensed doctor.</string>
+</resources>

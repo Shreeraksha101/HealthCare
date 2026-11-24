@@ -1,0 +1,447 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+    function isValidStringList(listVal, maxItems) {
+      return listVal is list && listVal.size() <= maxItems && (listVal.size() == 0 || listVal[0] is string);
+    }
+
+    // --- VALIDATION HELPERS ---
+
+    function isValidUserProfile(data) {
+      return isValidString(data.userId, 1, 128) &&
+             isValidString(data.displayName, 1, 80) &&
+             isValidString(data.email, 0, 120) &&
+             data.providerMode is bool &&
+             data.notificationsEnabled is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt) &&
+             (!('photoUrl' in data) || isValidString(data.photoUrl, 0, 500)) &&
+             (!('bloodGroup' in data) || isValidString(data.bloodGroup, 0, 12)) &&
+             (!('allergies' in data) || isValidString(data.allergies, 0, 300)) &&
+             (!('emergencyContactName' in data) || isValidString(data.emergencyContactName, 0, 80)) &&
+             (!('emergencyContactPhone' in data) || isValidString(data.emergencyContactPhone, 0, 30)) &&
+             (!('dateOfBirth' in data) || isValidString(data.dateOfBirth, 0, 20));
+    }
+
+    function isValidDoctor(data) {
+      return isValidString(data.ownerUid, 1, 128) &&
+             isValidString(data.name, 2, 100) &&
+             isValidString(data.specialization, 2, 60) &&
+             isValidString(data.qualifications, 2, 120) &&
+             isValidString(data.hospitalName, 2, 120) &&
+             isValidString(data.clinicAddress, 2, 200) &&
+             isValidString(data.phone, 5, 30) &&
+             data.experienceYears is int && data.experienceYears >= 0 && data.experienceYears <= 80 &&
+             (data.rating is float || data.rating is int) && data.rating >= 0 && data.rating <= 5 &&
+             data.inPersonFee is int && data.inPersonFee >= 0 && data.inPersonFee <= 100000 &&
+             data.virtualFee is int && data.virtualFee >= 0 && data.virtualFee <= 100000 &&
+             data.telemedicineEnabled is bool &&
+             data.listedInDirectory is bool &&
+             (data.avatarKey == 'female' || data.avatarKey == 'male') &&
+             isValidString(data.bio, 0, 500) &&
+             isValidStringList(data.virtualSlots, 24) &&
+             isValidStringList(data.clinicSlots, 24) &&
+             isValidStringList(data.availableDays, 7) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidBookedSlot(data) {
+      return isValidString(data.doctorId, 1, 128) &&
+             isValidString(data.dateIso, 8, 20) &&
+             isValidString(data.timeSlot, 3, 20) &&
+             (data.consultationType == 'VIRTUAL' || data.consultationType == 'IN_PERSON') &&
+             isValidString(data.bookedByUid, 1, 128) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidAppointment(data) {
+      return isValidString(data.patientId, 1, 128) &&
+             isValidString(data.patientName, 1, 80) &&
+             isValidString(data.doctorId, 1, 128) &&
+             isValidString(data.doctorOwnerUid, 1, 128) &&
+             isValidString(data.doctorName, 2, 100) &&
+             isValidString(data.department, 2, 60) &&
+             isValidString(data.hospitalName, 2, 120) &&
+             (data.consultationType == 'VIRTUAL' || data.consultationType == 'IN_PERSON') &&
+             isValidString(data.dateIso, 8, 20) &&
+             isValidString(data.timeSlot, 3, 20) &&
+             isValidString(data.reason, 0, 400) &&
+             (data.status == 'UPCOMING' || data.status == 'IN_CALL' || data.status == 'COMPLETED' || data.status == 'CANCELLED') &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt) &&
+             (!('roomId' in data) || isValidString(data.roomId, 1, 128)) &&
+             (!('slotKey' in data) || isValidString(data.slotKey, 1, 128)) &&
+             (!('notes' in data) || isValidString(data.notes, 0, 1000));
+    }
+
+    function isValidTelemedicineRoom(data) {
+      return isValidString(data.appointmentId, 1, 128) &&
+             isValidString(data.patientId, 1, 128) &&
+             isValidString(data.doctorOwnerUid, 1, 128) &&
+             data.participantUids is list && data.participantUids.size() >= 1 && data.participantUids.size() <= 2 &&
+             data.participantUids[0] is string &&
+             isValidString(data.doctorName, 2, 100) &&
+             isValidString(data.patientName, 1, 80) &&
+             (data.status == 'WAITING' || data.status == 'IN_CALL' || data.status == 'ENDED') &&
+             data.patientMicOn is bool &&
+             data.patientCamOn is bool &&
+             data.doctorMicOn is bool &&
+             data.doctorCamOn is bool &&
+             data.durationSeconds is int && data.durationSeconds >= 0 && data.durationSeconds <= 86400 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt) &&
+             (!('summaryNotes' in data) || isValidString(data.summaryNotes, 0, 1000));
+    }
+
+    function isValidTelemedicineMessage(data) {
+      return isValidString(data.roomId, 1, 128) &&
+             data.participantUids is list && data.participantUids.size() >= 1 && data.participantUids.size() <= 2 &&
+             data.participantUids[0] is string &&
+             isValidString(data.senderUid, 1, 128) &&
+             isValidString(data.senderName, 1, 80) &&
+             (data.senderRole == 'PATIENT' || data.senderRole == 'DOCTOR') &&
+             isValidString(data.text, 1, 1000) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidMedicine(data) {
+      return isValidString(data.userId, 1, 128) &&
+             isValidString(data.name, 1, 100) &&
+             isValidString(data.dosage, 1, 60) &&
+             isValidString(data.instructions, 0, 200) &&
+             data.scheduleTimes is list && data.scheduleTimes.size() >= 1 && data.scheduleTimes.size() <= 6 &&
+             data.scheduleTimes[0] is string &&
+             data.remindersEnabled is bool &&
+             data.active is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidDoseLog(data) {
+      return isValidString(data.userId, 1, 128) &&
+             isValidString(data.medicineId, 1, 128) &&
+             isValidString(data.medicineName, 1, 100) &&
+             isValidString(data.dosage, 1, 60) &&
+             isValidString(data.dateIso, 8, 20) &&
+             isValidString(data.scheduledTime, 3, 20) &&
+             (data.status == 'TAKEN' || data.status == 'MISSED' || data.status == 'PENDING') &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMedicalReport(data) {
+      return isValidString(data.userId, 1, 128) &&
+             isValidString(data.title, 1, 120) &&
+             (data.category == 'Lab Results' || data.category == 'Prescriptions' ||
+              data.category == 'Imaging & Scans' || data.category == 'Discharge Summary' ||
+              data.category == 'Vaccination' || data.category == 'Other') &&
+             isValidString(data.reportDate, 4, 20) &&
+             isValidString(data.fileName, 1, 160) &&
+             isValidString(data.mimeType, 1, 80) &&
+             data.fileSizeBytes is int && data.fileSizeBytes >= 0 && data.fileSizeBytes <= 52428800 &&
+             isValidString(data.localRelativePath, 1, 260) &&
+             isValidString(data.notes, 0, 500) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // --- COLLECTIONS ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'email', 'providerMode', 'notificationsEnabled', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'displayName', 'email', 'photoUrl', 'bloodGroup',
+                         'allergies', 'emergencyContactName', 'emergencyContactPhone',
+                         'dateOfBirth', 'providerMode', 'notificationsEnabled',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'photoUrl', 'bloodGroup', 'allergies',
+                         'emergencyContactName', 'emergencyContactPhone', 'dateOfBirth',
+                         'providerMode', 'notificationsEnabled', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // User Medicines Subcollection
+      match /medicines/{medicineId} {
+        allow get: if isOwner(userId) && isValidId(medicineId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(medicineId) &&
+                         incoming().userId == userId &&
+                         incoming().keys().hasAll(['userId', 'name', 'dosage', 'instructions', 'scheduleTimes', 'remindersEnabled', 'active', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'dosage', 'instructions', 'scheduleTimes', 'remindersEnabled', 'active', 'createdAt', 'updatedAt']) &&
+                         isValidMedicine(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(medicineId) &&
+                         isValidMedicine(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'dosage', 'instructions', 'scheduleTimes', 'remindersEnabled', 'active', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(medicineId);
+      }
+
+      // User Dose Logs Subcollection
+      match /doseLogs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(logId) &&
+                         incoming().userId == userId &&
+                         incoming().keys().hasAll(['userId', 'medicineId', 'medicineName', 'dosage', 'dateIso', 'scheduledTime', 'status', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'medicineId', 'medicineName', 'dosage', 'dateIso', 'scheduledTime', 'status', 'createdAt', 'updatedAt']) &&
+                         isValidDoseLog(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(logId) &&
+                         isValidDoseLog(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().medicineId == existing().medicineId &&
+                         incoming().dateIso == existing().dateIso &&
+                         incoming().scheduledTime == existing().scheduledTime &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'medicineName', 'dosage', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(logId);
+      }
+
+      // User Medical Reports Subcollection
+      match /reports/{reportId} {
+        allow get: if isOwner(userId) && isValidId(reportId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(reportId) &&
+                         incoming().userId == userId &&
+                         incoming().keys().hasAll(['userId', 'title', 'category', 'reportDate', 'fileName', 'mimeType', 'fileSizeBytes', 'localRelativePath', 'notes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'category', 'reportDate', 'fileName', 'mimeType', 'fileSizeBytes', 'localRelativePath', 'notes', 'createdAt', 'updatedAt']) &&
+                         isValidMedicalReport(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(reportId) &&
+                         isValidMedicalReport(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'reportDate', 'notes', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(reportId);
+      }
+    }
+
+    // --- DOCTORS DIRECTORY & SLOT RESERVATIONS ---
+
+    match /doctors/{doctorId} {
+      allow get: if isSignedIn() && isValidId(doctorId) && (existing().listedInDirectory == true || existing().ownerUid == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.listedInDirectory == true || resource.data.ownerUid == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(doctorId) &&
+                       incoming().ownerUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'ownerUid', 'name', 'specialization', 'qualifications', 'hospitalName',
+                         'clinicAddress', 'phone', 'experienceYears', 'rating', 'inPersonFee',
+                         'virtualFee', 'telemedicineEnabled', 'listedInDirectory', 'avatarKey',
+                         'bio', 'virtualSlots', 'clinicSlots', 'availableDays', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'ownerUid', 'name', 'specialization', 'qualifications', 'hospitalName',
+                         'clinicAddress', 'phone', 'experienceYears', 'rating', 'inPersonFee',
+                         'virtualFee', 'telemedicineEnabled', 'listedInDirectory', 'avatarKey',
+                         'bio', 'virtualSlots', 'clinicSlots', 'availableDays', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidDoctor(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(doctorId) &&
+                       isValidDoctor(incoming()) &&
+                       existing().ownerUid == request.auth.uid &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name', 'specialization', 'qualifications', 'hospitalName',
+                         'clinicAddress', 'phone', 'experienceYears', 'inPersonFee',
+                         'virtualFee', 'telemedicineEnabled', 'listedInDirectory', 'avatarKey',
+                         'bio', 'virtualSlots', 'clinicSlots', 'availableDays', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(doctorId) && existing().ownerUid == request.auth.uid;
+
+      match /bookedSlots/{slotKey} {
+        allow get: if isSignedIn() && isValidId(doctorId) && isValidId(slotKey) && existing().doctorId == doctorId;
+        allow list: if isSignedIn() && resource.data.doctorId == doctorId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(doctorId) &&
+                         isValidId(slotKey) &&
+                         incoming().bookedByUid == request.auth.uid &&
+                         incoming().doctorId == doctorId &&
+                         incoming().keys().hasAll(['doctorId', 'dateIso', 'timeSlot', 'consultationType', 'bookedByUid', 'createdAt']) &&
+                         incoming().keys().hasOnly(['doctorId', 'dateIso', 'timeSlot', 'consultationType', 'bookedByUid', 'createdAt']) &&
+                         isValidBookedSlot(incoming()) &&
+                         exists(/databases/$(database)/documents/doctors/$(doctorId));
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(doctorId) && isValidId(slotKey) && existing().bookedByUid == request.auth.uid;
+      }
+    }
+
+    // --- APPOINTMENTS ---
+
+    match /appointments/{appointmentId} {
+      allow get: if isSignedIn() && isValidId(appointmentId) &&
+                    (existing().patientId == request.auth.uid || existing().doctorOwnerUid == request.auth.uid);
+      allow list: if isSignedIn() &&
+                     (resource.data.patientId == request.auth.uid || resource.data.doctorOwnerUid == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(appointmentId) &&
+                       incoming().patientId == request.auth.uid &&
+                       incoming().status == 'UPCOMING' &&
+                       incoming().keys().hasAll([
+                         'patientId', 'patientName', 'doctorId', 'doctorOwnerUid', 'doctorName',
+                         'department', 'hospitalName', 'consultationType', 'dateIso', 'timeSlot',
+                         'reason', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'patientId', 'patientName', 'doctorId', 'doctorOwnerUid', 'doctorName',
+                         'department', 'hospitalName', 'consultationType', 'dateIso', 'timeSlot',
+                         'reason', 'status', 'roomId', 'slotKey', 'notes', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidAppointment(incoming()) &&
+                       exists(/databases/$(database)/documents/doctors/$(incoming().doctorId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(appointmentId) &&
+                       isValidAppointment(incoming()) &&
+                       (existing().patientId == request.auth.uid || existing().doctorOwnerUid == request.auth.uid) &&
+                       existing().status != 'COMPLETED' &&
+                       existing().status != 'CANCELLED' &&
+                       incoming().patientId == existing().patientId &&
+                       incoming().doctorId == existing().doctorId &&
+                       incoming().doctorOwnerUid == existing().doctorOwnerUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Action: Reschedule (patient or doctor)
+                         incoming().diff(existing()).affectedKeys().hasOnly(['dateIso', 'timeSlot', 'slotKey', 'updatedAt']) ||
+                         // Action: Status / Call transition / Notes
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'roomId', 'updatedAt'])
+                       );
+
+      allow delete: if isSignedIn() && isValidId(appointmentId) && existing().patientId == request.auth.uid;
+    }
+
+    // --- TELEMEDICINE VIDEO CONSULTATION ROOMS ---
+
+    match /telemedicineRooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) &&
+                    (existing().patientId == request.auth.uid || existing().doctorOwnerUid == request.auth.uid);
+      allow list: if isSignedIn() &&
+                     (resource.data.patientId == request.auth.uid || resource.data.doctorOwnerUid == request.auth.uid || request.auth.uid in resource.data.participantUids);
+
+      allow create: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       (incoming().patientId == request.auth.uid || incoming().doctorOwnerUid == request.auth.uid) &&
+                       request.auth.uid in incoming().participantUids &&
+                       incoming().keys().hasAll([
+                         'appointmentId', 'patientId', 'doctorOwnerUid', 'participantUids',
+                         'doctorName', 'patientName', 'status', 'patientMicOn', 'patientCamOn',
+                         'doctorMicOn', 'doctorCamOn', 'durationSeconds', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'appointmentId', 'patientId', 'doctorOwnerUid', 'participantUids',
+                         'doctorName', 'patientName', 'status', 'patientMicOn', 'patientCamOn',
+                         'doctorMicOn', 'doctorCamOn', 'durationSeconds', 'summaryNotes',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidTelemedicineRoom(incoming()) &&
+                       existsAfter(/databases/$(database)/documents/appointments/$(incoming().appointmentId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       isValidTelemedicineRoom(incoming()) &&
+                       (existing().patientId == request.auth.uid || existing().doctorOwnerUid == request.auth.uid) &&
+                       existing().status != 'ENDED' &&
+                       incoming().appointmentId == existing().appointmentId &&
+                       incoming().patientId == existing().patientId &&
+                       incoming().doctorOwnerUid == existing().doctorOwnerUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Action: Media toggle / Join call
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'patientMicOn', 'patientCamOn', 'doctorMicOn', 'doctorCamOn', 'durationSeconds', 'updatedAt']) ||
+                         // Action: End call with consultation notes
+                         (incoming().status == 'ENDED' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'durationSeconds', 'summaryNotes', 'updatedAt']))
+                       );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(messageId) &&
+                      (request.auth.uid in existing().participantUids);
+        allow list: if isSignedIn() && (request.auth.uid in resource.data.participantUids);
+
+        allow create: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(messageId) &&
+                         incoming().roomId == roomId &&
+                         incoming().senderUid == request.auth.uid &&
+                         request.auth.uid in incoming().participantUids &&
+                         incoming().keys().hasAll(['roomId', 'participantUids', 'senderUid', 'senderName', 'senderRole', 'text', 'createdAt']) &&
+                         incoming().keys().hasOnly(['roomId', 'participantUids', 'senderUid', 'senderName', 'senderRole', 'text', 'createdAt']) &&
+                         isValidTelemedicineMessage(incoming()) &&
+                         exists(/databases/$(database)/documents/telemedicineRooms/$(roomId)) &&
+                         request.auth.uid in get(/databases/$(database)/documents/telemedicineRooms/$(roomId)).data.participantUids;
+
+        allow update, delete: if false;
+      }
+    }
+  }
+}

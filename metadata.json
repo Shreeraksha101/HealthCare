@@ -1,0 +1,6 @@
+{
+  "name": "HealthCare Companion",
+  "description": "AI-powered health and care management Android app for appointments, medicine reminders, doctor directory, nearby hospitals map, and medical reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
